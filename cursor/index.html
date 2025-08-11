@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit User Posts & Comments</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #030303;
+            color: #d7dadc;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background-color: #1a1a1b;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #343536;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #d7dadc;
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #343536;
+            border-radius: 4px;
+            background-color: #272729;
+            color: #d7dadc;
+            font-size: 14px;
+        }
+
+        input[type="text"]:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #0079d3;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #343536;
+            border-radius: 4px;
+            background-color: #272729;
+            color: #d7dadc;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #0079d3;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+            margin-bottom: 15px;
+        }
+
+        button {
+            background-color: #0079d3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #005fa3;
+        }
+
+        button:disabled {
+            background-color: #343536;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #818384;
+        }
+
+        .error {
+            background-color: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .post {
+            background-color: #1a1a1b;
+            border: 1px solid #343536;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .post-header {
+            padding: 15px;
+            border-bottom: 1px solid #343536;
+            background-color: #272729;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .post-header:hover {
+            background-color: #2f3031;
+        }
+
+        .post-toggle {
+            font-size: 14px;
+            color: #818384;
+            user-select: none;
+            width: 20px;
+            text-align: center;
+            margin-top: 2px;
+        }
+
+        .post-toggle:hover {
+            color: #d7dadc;
+        }
+
+        .post-header-content {
+            flex: 1;
+        }
+
+        .post-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #d7dadc;
+        }
+
+        .post-meta {
+            font-size: 12px;
+            color: #818384;
+        }
+
+        .post-collapsed-indicator {
+            font-size: 12px;
+            color: #818384;
+            font-style: italic;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .post-link {
+            font-size: 12px;
+            color: #4fbcff;
+            text-decoration: none;
+            margin-left: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background-color: rgba(79, 188, 255, 0.1);
+            transition: background-color 0.2s;
+        }
+
+        .post-link:hover {
+            background-color: rgba(79, 188, 255, 0.2);
+            text-decoration: none;
+        }
+
+        .post-actions {
+            display: flex;
+            align-items: center;
+            margin-top: 8px;
+            gap: 10px;
+        }
+
+        .post-content {
+            padding: 15px;
+            transition: opacity 0.2s ease;
+        }
+
+        .post-content.collapsed {
+            display: none;
+        }
+
+        .post.collapsed {
+            margin-bottom: 10px;
+        }
+
+        .post.collapsed .post-header {
+            border-bottom: none;
+        }
+
+        .post-text {
+            margin-bottom: 15px;
+            color: #d7dadc;
+        }
+
+        .comments-section {
+            border-top: 1px solid #343536;
+            padding: 15px;
+        }
+
+        .comment {
+            margin-bottom: 15px;
+            padding-left: 20px;
+            border-left: 2px solid #343536;
+        }
+
+        .comment-header {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .comment-header:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            padding: 4px;
+            margin: -4px;
+        }
+
+        .comment-toggle {
+            margin-right: 8px;
+            font-size: 12px;
+            color: #818384;
+            user-select: none;
+            width: 16px;
+            text-align: center;
+        }
+
+        .comment-toggle:hover {
+            color: #d7dadc;
+        }
+
+        .comment-author {
+            font-weight: 600;
+            color: #4fbcff;
+        }
+
+        .comment-meta {
+            font-size: 12px;
+            color: #818384;
+            margin-left: 10px;
+        }
+
+        .comment-body {
+            color: #d7dadc;
+            margin-bottom: 8px;
+        }
+
+        .comment-score {
+            font-size: 12px;
+            color: #818384;
+        }
+
+        .nested-comments {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        .comment-content {
+            transition: opacity 0.2s ease;
+        }
+
+        .comment-content.collapsed {
+            display: none;
+        }
+
+        .comment.collapsed {
+            margin-bottom: 5px;
+        }
+
+        .comment-collapsed-indicator {
+            font-size: 12px;
+            color: #818384;
+            font-style: italic;
+            margin-left: 8px;
+        }
+
+        .stats {
+            background-color: #1a1a1b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #343536;
+        }
+
+        .stats h3 {
+            margin-bottom: 10px;
+            color: #d7dadc;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            background-color: #272729;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0079d3;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #818384;
+            margin-top: 5px;
+        }
+
+        .no-posts {
+            text-align: center;
+            padding: 40px;
+            color: #818384;
+        }
+
+        .api-urls {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #272729;
+            border-radius: 4px;
+            border: 1px solid #343536;
+        }
+
+        .api-urls-header {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        .api-urls-header:hover {
+            color: #d7dadc;
+        }
+
+        .api-urls-toggle {
+            margin-right: 8px;
+            font-size: 12px;
+            color: #818384;
+            user-select: none;
+            width: 16px;
+            text-align: center;
+        }
+
+        .api-urls h5 {
+            margin: 0;
+            color: #d7dadc;
+            font-size: 14px;
+        }
+
+        .api-urls-content {
+            transition: opacity 0.2s ease;
+        }
+
+        .api-urls-content.collapsed {
+            display: none;
+        }
+
+        .api-urls ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .api-urls li {
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #818384;
+        }
+
+        .api-urls code {
+            background-color: #1a1a1b;
+            padding: 4px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            color: #4fbcff;
+            word-break: break-all;
+        }
+
+        /* Markdown content styling */
+        .markdown-content {
+            line-height: 1.6;
+        }
+
+        .markdown-content h1, .markdown-content h2, .markdown-content h3, 
+        .markdown-content h4, .markdown-content h5, .markdown-content h6 {
+            color: #d7dadc;
+            margin: 16px 0 8px 0;
+            font-weight: 600;
+        }
+
+        .markdown-content h1 { font-size: 1.5em; }
+        .markdown-content h2 { font-size: 1.3em; }
+        .markdown-content h3 { font-size: 1.1em; }
+
+        .markdown-content p {
+            margin: 8px 0;
+            color: #d7dadc;
+        }
+
+        .markdown-content a {
+            color: #4fbcff;
+            text-decoration: none;
+        }
+
+        .markdown-content a:hover {
+            text-decoration: underline;
+        }
+
+        .markdown-content code {
+            background-color: #1a1a1b;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            color: #ff6b6b;
+            font-size: 0.9em;
+        }
+
+        .markdown-content pre {
+            background-color: #1a1a1b;
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 12px 0;
+            border: 1px solid #343536;
+        }
+
+        .markdown-content pre code {
+            background: none;
+            padding: 0;
+            color: #d7dadc;
+        }
+
+        .markdown-content blockquote {
+            border-left: 4px solid #4fbcff;
+            padding-left: 16px;
+            margin: 12px 0;
+            color: #b3b6b7;
+            font-style: italic;
+        }
+
+        .markdown-content ul, .markdown-content ol {
+            margin: 8px 0 8px 24px;
+            color: #d7dadc;
+        }
+
+        .markdown-content li {
+            margin: 4px 0;
+        }
+
+        .markdown-content strong {
+            color: #d7dadc;
+            font-weight: 600;
+        }
+
+        .markdown-content em {
+            color: #b3b6b7;
+            font-style: italic;
+        }
+
+        .markdown-content hr {
+            border: none;
+            border-top: 1px solid #343536;
+            margin: 16px 0;
+        }
+
+        .markdown-content table {
+            border-collapse: collapse;
+            margin: 12px 0;
+            width: 100%;
+        }
+
+        .markdown-content th, .markdown-content td {
+            border: 1px solid #343536;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .markdown-content th {
+            background-color: #272729;
+            color: #d7dadc;
+            font-weight: 600;
+        }
+
+        .markdown-content td {
+            color: #d7dadc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Reddit User Posts & Comments</h1>
+            <p>Enter a subreddit to fetch the latest posts and comments from the past week. Optionally specify a username to filter by a specific author.</p>
+            
+            <div class="form-group">
+                <label for="username">Reddit Username (optional):</label>
+                <input type="text" id="username" placeholder="Enter Reddit username (leave empty for all posts)" value="">
+            </div>
+            
+            <div class="form-group">
+                <label for="subreddit">Subreddit:</label>
+                <input type="text" id="subreddit" placeholder="Enter subreddit name (without r/)" value="">
+            </div>
+
+            <div class="form-group">
+                <label for="titleSearch">Title Search (optional):</label>
+                <input type="text" id="titleSearch" placeholder="Enter keywords to search in post titles" value="">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="limit">Post Limit:</label>
+                    <input type="number" id="limit" placeholder="Number of posts to fetch" value="25" min="1" max="100">
+                </div>
+                <div class="form-group">
+                    <label for="timeFilter">Time Filter:</label>
+                    <select id="timeFilter">
+                        <option value="all">All Time</option>
+                        <option value="year">Past Year</option>
+                        <option value="month">Past Month</option>
+                        <option value="week">Past Week</option>
+                        <option value="day">Past 24 Hours</option>
+                        <option value="hour">Past Hour</option>
+                    </select>
+                </div>
+            </div>
+            
+            <button id="fetchBtn" onclick="fetchPosts()">Fetch Posts & Comments</button>
+        </div>
+
+        <div id="stats" class="stats" style="display: none;">
+            <h3>Statistics</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number" id="totalPosts">0</div>
+                    <div class="stat-label">Total Posts</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="totalComments">0</div>
+                    <div class="stat-label">Total Comments</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="totalScore">0</div>
+                    <div class="stat-label">Total Score</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content"></div>
+    </div>
+
+    <script>
+        // Reddit API configuration
+        const REDDIT_API_BASE = 'https://www.reddit.com';
+        const ONE_WEEK_AGO = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+
+        // Cache for storing fetched data
+        let postsCache = new Map();
+        let commentsCache = new Map();
+
+        async function fetchPosts() {
+            const username = document.getElementById('username').value.trim();
+            const subreddit = document.getElementById('subreddit').value.trim();
+            const titleSearch = document.getElementById('titleSearch').value.trim();
+            const limit = parseInt(document.getElementById('limit').value) || 25;
+            const timeFilter = document.getElementById('timeFilter').value;
+
+            if (limit < 1 || limit > 100) {
+                showError('Post limit must be between 1 and 100');
+                return;
+            }
+
+            const fetchBtn = document.getElementById('fetchBtn');
+            const content = document.getElementById('content');
+            
+            fetchBtn.disabled = true;
+            fetchBtn.textContent = 'Fetching...';
+            content.innerHTML = '<div class="loading">Loading posts and comments...</div>';
+
+            try {
+                // Fetch user's posts in the subreddit
+                const posts = await fetchUserPosts(username, subreddit, titleSearch, limit, timeFilter);
+                
+                if (posts.length === 0) {
+                    content.innerHTML = '<div class="no-posts">No posts found for this user in the specified subreddit within the past week.</div>';
+                    return;
+                }
+
+                // Fetch comments for each post
+                const postsWithComments = await fetchCommentsForPosts(posts);
+                
+                // Display the results
+                displayResults(postsWithComments);
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                showError('Error fetching data from Reddit. Please try again.');
+            } finally {
+                fetchBtn.disabled = false;
+                fetchBtn.textContent = 'Fetch Posts & Comments';
+            }
+        }
+
+        async function fetchUserPosts(username, subreddit, titleSearch, limit, timeFilter) {
+            // Build search query components
+            const queryParts = [];
+            
+            if (username) {
+                queryParts.push(`author:${username}`);
+            }
+            if (subreddit) {
+                queryParts.push(`subreddit:${subreddit}`);
+            }
+            if (titleSearch) {
+                queryParts.push(`title:${titleSearch}`);
+            }
+            
+            if (queryParts.length === 0) {
+                showError('Please specify at least one filter: username, subreddit, or title.');
+                throw new Error('No filters specified');
+            }
+            
+            const query = encodeURIComponent(queryParts.join(' '));
+            const searchUrl = `${REDDIT_API_BASE}/search.json?q=${query}&sort=new&t=${timeFilter}&limit=${limit}`;
+            try {
+                alert(searchUrl);
+                const response = await fetch(searchUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const posts = data.data.children || [];
+                
+                // Filter posts based on time filter (additional safety check)
+                return posts.filter(post => {
+                    const postData = post.data;
+                    const postTime = postData.created_utc;
+                    const now = Math.floor(Date.now() / 1000);
+                    
+                    switch (timeFilter) {
+                        case 'hour':
+                            return postTime >= now - 3600;
+                        case 'day':
+                            return postTime >= now - 86400;
+                        case 'week':
+                            return postTime >= now - 604800;
+                        case 'month':
+                            return postTime >= now - 2592000;
+                        case 'year':
+                            return postTime >= now - 31536000;
+                        case 'all':
+                        default:
+                            return true; // No filtering for 'all'
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error fetching posts:', error);
+                throw error;
+            }
+        }
+
+        async function fetchCommentsForPosts(posts) {
+            const postsWithComments = [];
+            
+            for (const post of posts) {
+                try {
+                    const comments = await fetchPostComments(post.data.permalink);
+                    postsWithComments.push({
+                        post: post.data,
+                        comments: comments
+                    });
+                } catch (error) {
+                    console.error(`Error fetching comments for post ${post.data.id}:`, error);
+                    postsWithComments.push({
+                        post: post.data,
+                        comments: []
+                    });
+                }
+            }
+            
+            return postsWithComments;
+        }
+
+        async function fetchPostComments(permalink) {
+            const url = `${REDDIT_API_BASE}${permalink}.json`;
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const comments = data[1]?.data?.children || [];
+                
+                return processComments(comments);
+                
+            } catch (error) {
+                console.error('Error fetching comments:', error);
+                return [];
+            }
+        }
+
+        function processComments(comments) {
+            const processedComments = [];
+            
+            for (const comment of comments) {
+                if (comment.kind === 't1' && comment.data) {
+                    const commentData = comment.data;
+                    
+                    // Skip deleted or removed comments
+                    if (commentData.body === '[deleted]' || commentData.body === '[removed]') {
+                        continue;
+                    }
+                    
+                    const processedComment = {
+                        id: commentData.id,
+                        author: commentData.author,
+                        body: commentData.body,
+                        score: commentData.score,
+                        created_utc: commentData.created_utc,
+                        replies: commentData.replies ? processComments(commentData.replies.data.children) : []
+                    };
+                    
+                    processedComments.push(processedComment);
+                }
+            }
+            
+            return processedComments;
+        }
+
+        function displayResults(postsWithComments) {
+            const content = document.getElementById('content');
+            const stats = document.getElementById('stats');
+            
+            // Get current search parameters for URL display
+            const username = document.getElementById('username').value.trim();
+            const titleSearch = document.getElementById('titleSearch').value.trim();
+            const limit = parseInt(document.getElementById('limit').value) || 25;
+            const timeFilter = document.getElementById('timeFilter').value;
+            
+            let totalComments = 0;
+            let totalScore = 0;
+            
+            let html = '';
+            
+            for (const { post, comments } of postsWithComments) {
+                totalComments += comments.length;
+                totalScore += post.score || 0;
+                
+                const postId = `post-${post.id}`;
+                const totalCommentsCount = countTotalComments(comments);
+                const hasContent = post.selftext || comments.length > 0;
+                
+                html += `
+                    <div class="post" id="${postId}">
+                        <div class="post-header" onclick="togglePost('${postId}')">
+                            <span class="post-toggle">${hasContent ? '▼' : ''}</span>
+                            <div class="post-header-content">
+                                <div class="post-title">${escapeHtml(post.title)}</div>
+                                <div class="post-meta">
+                                    Posted by u/${post.author} in r/${post.subreddit} • 
+                                    ${formatTime(post.created_utc)} • 
+                                    Score: ${post.score || 0}
+                                </div>
+                                <div class="post-actions">
+                                    <a href="${REDDIT_API_BASE}${post.permalink}" target="_blank" class="post-link" onclick="event.stopPropagation()">
+                                        View on Reddit ↗
+                                    </a>
+                                </div>
+                                <div class="post-collapsed-indicator">
+                                    ${totalCommentsCount > 0 ? `${totalCommentsCount} comments` : 'No comments'}
+                                    ${post.selftext ? ' • Has text content' : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="post-content">
+                            ${post.selftext ? `<div class="post-text markdown-content">${renderMarkdown(post.selftext)}</div>` : ''}
+                            <div class="comments-section">
+                                <h4>Comments (${comments.length})</h4>
+                                ${renderComments(comments)}
+                                <div class="api-urls">
+                                    <div class="api-urls-header" onclick="toggleApiUrls('${postId}')">
+                                        <span class="api-urls-toggle">▶</span>
+                                        <h5>API URLs Used</h5>
+                                    </div>
+                                    <div class="api-urls-content collapsed" id="api-urls-${postId}">
+                                        <ul>
+                                            <li><strong>Posts:</strong> <code>${REDDIT_API_BASE}/r/${post.subreddit}/search.json?q=${buildSearchQuery(username, titleSearch)}&sort=new&t=${timeFilter}&limit=${limit}</code></li>
+                                            <li><strong>Comments:</strong> <code>${REDDIT_API_BASE}${post.permalink}.json</code></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            content.innerHTML = html;
+            
+            // Update statistics
+            document.getElementById('totalPosts').textContent = postsWithComments.length;
+            document.getElementById('totalComments').textContent = totalComments;
+            document.getElementById('totalScore').textContent = totalScore;
+            stats.style.display = 'block';
+        }
+
+        function renderComments(comments, depth = 0) {
+            if (comments.length === 0) {
+                return '<p style="color: #818384; font-style: italic;">No comments</p>';
+            }
+            
+            let html = '';
+            for (const comment of comments) {
+                html += renderComment(comment, depth);
+            }
+            return html;
+        }
+
+        function renderComment(comment, depth = 0) {
+            const hasReplies = comment.replies && comment.replies.length > 0;
+            const repliesHtml = hasReplies 
+                ? `<div class="nested-comments">${renderComments(comment.replies, depth + 1)}</div>` 
+                : '';
+            
+            const commentId = `comment-${comment.id}`;
+            const toggleIcon = hasReplies ? '▼' : '';
+            const replyCount = hasReplies ? ` (${countTotalReplies(comment.replies)} replies)` : '';
+            
+            return `
+                <div class="comment" id="${commentId}">
+                    <div class="comment-header" onclick="toggleComment('${commentId}')">
+                        <span class="comment-toggle">${toggleIcon}</span>
+                        <span class="comment-author">u/${comment.author}</span>
+                        <span class="comment-meta">• ${formatTime(comment.created_utc)} • Score: ${comment.score}</span>
+                        <span class="comment-collapsed-indicator" style="display: none;">${replyCount}</span>
+                    </div>
+                    <div class="comment-content">
+                        <div class="comment-body markdown-content">${renderMarkdown(comment.body)}</div>
+                        ${repliesHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp * 1000);
+            const now = new Date();
+            const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
+            
+            if (diffInHours < 1) return 'just now';
+            if (diffInHours < 24) return `${diffInHours}h ago`;
+            
+            const diffInDays = Math.floor(diffInHours / 24);
+            if (diffInDays < 7) return `${diffInDays}d ago`;
+            
+            return date.toLocaleDateString();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function renderMarkdown(text) {
+            if (!text) return '';
+            
+            try {
+                // Configure marked for safe rendering
+                marked.setOptions({
+                    breaks: true,
+                    gfm: true,
+                    sanitize: false, // We'll handle XSS protection ourselves
+                    smartLists: true,
+                    smartypants: false
+                });
+                
+                // Render markdown to HTML
+                const html = marked.parse(text);
+                
+                // Basic XSS protection - remove script tags and javascript: links
+                const cleaned = html
+                    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                    .replace(/javascript:/gi, 'javascript-blocked:')
+                    .replace(/on\w+\s*=/gi, 'data-blocked-event=');
+                
+                return cleaned;
+            } catch (error) {
+                console.error('Error rendering markdown:', error);
+                return escapeHtml(text);
+            }
+        }
+
+        function buildSearchQuery(username, titleSearch) {
+            const queryParts = [];
+            
+            if (username) {
+                queryParts.push(`author%3A${encodeURIComponent(username)}`);
+            }
+            
+            if (titleSearch) {
+                queryParts.push(`title%3A${encodeURIComponent(titleSearch)}`);
+            }
+            
+            return queryParts.join('%20');
+        }
+
+        function showError(message) {
+            const content = document.getElementById('content');
+            content.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function toggleComment(commentId) {
+            const commentElement = document.getElementById(commentId);
+            const contentElement = commentElement.querySelector('.comment-content');
+            const toggleElement = commentElement.querySelector('.comment-toggle');
+            const collapsedIndicator = commentElement.querySelector('.comment-collapsed-indicator');
+            
+            const isCollapsed = contentElement.classList.contains('collapsed');
+            
+            if (isCollapsed) {
+                // Expand
+                contentElement.classList.remove('collapsed');
+                commentElement.classList.remove('collapsed');
+                toggleElement.textContent = toggleElement.textContent ? '▼' : '';
+                collapsedIndicator.style.display = 'none';
+            } else {
+                // Collapse
+                contentElement.classList.add('collapsed');
+                commentElement.classList.add('collapsed');
+                toggleElement.textContent = toggleElement.textContent ? '▶' : '';
+                collapsedIndicator.style.display = 'inline';
+            }
+        }
+
+        function countTotalReplies(replies) {
+            if (!replies || replies.length === 0) return 0;
+            
+            let total = replies.length;
+            for (const reply of replies) {
+                total += countTotalReplies(reply.replies);
+            }
+            return total;
+        }
+
+        function countTotalComments(comments) {
+            if (!comments || comments.length === 0) return 0;
+            
+            let total = comments.length;
+            for (const comment of comments) {
+                total += countTotalReplies(comment.replies);
+            }
+            return total;
+        }
+
+        function togglePost(postId) {
+            const postElement = document.getElementById(postId);
+            const contentElement = postElement.querySelector('.post-content');
+            const toggleElement = postElement.querySelector('.post-toggle');
+            const collapsedIndicator = postElement.querySelector('.post-collapsed-indicator');
+            
+            const isCollapsed = contentElement.classList.contains('collapsed');
+            
+            if (isCollapsed) {
+                // Expand
+                contentElement.classList.remove('collapsed');
+                postElement.classList.remove('collapsed');
+                toggleElement.textContent = toggleElement.textContent ? '▼' : '';
+                collapsedIndicator.style.display = 'none';
+            } else {
+                // Collapse
+                contentElement.classList.add('collapsed');
+                postElement.classList.add('collapsed');
+                toggleElement.textContent = toggleElement.textContent ? '▶' : '';
+                collapsedIndicator.style.display = 'block';
+            }
+        }
+
+        function toggleApiUrls(postId) {
+            const apiUrlsContent = document.getElementById(`api-urls-${postId}`);
+            const toggleElement = document.querySelector(`[onclick="toggleApiUrls('${postId}')"] .api-urls-toggle`);
+            
+            const isCollapsed = apiUrlsContent.classList.contains('collapsed');
+            
+            if (isCollapsed) {
+                // Expand
+                apiUrlsContent.classList.remove('collapsed');
+                toggleElement.textContent = '▼';
+            } else {
+                // Collapse
+                apiUrlsContent.classList.add('collapsed');
+                toggleElement.textContent = '▶';
+            }
+        }
+
+        // Function to parse URL parameters
+        function getUrlParameters() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                username: params.get('username') || '',
+                subreddit: params.get('subreddit') || '',
+                titleSearch: params.get('title') || params.get('titleSearch') || '',
+                limit: params.get('limit') || '25',
+                timeFilter: params.get('time') || params.get('timeFilter') || 'all'
+            };
+        }
+
+        // Function to set initial values from URL parameters
+        function setInitialValues() {
+            const params = getUrlParameters();
+            
+            document.getElementById('username').value = params.username;
+            document.getElementById('subreddit').value = params.subreddit;
+            document.getElementById('titleSearch').value = params.titleSearch;
+            document.getElementById('limit').value = params.limit;
+            document.getElementById('timeFilter').value = params.timeFilter;
+            
+            // Auto-fetch if subreddit is provided
+            if (params.subreddit) {
+                fetchPosts();
+            }
+        }
+
+        // Function to update URL with current form values
+        function updateUrl() {
+            const username = document.getElementById('username').value.trim();
+            const subreddit = document.getElementById('subreddit').value.trim();
+            const titleSearch = document.getElementById('titleSearch').value.trim();
+            const limit = document.getElementById('limit').value;
+            const timeFilter = document.getElementById('timeFilter').value;
+            
+            const params = new URLSearchParams();
+            
+            if (username) params.set('username', username);
+            if (subreddit) params.set('subreddit', subreddit);
+            if (titleSearch) params.set('title', titleSearch);
+            if (limit && limit !== '25') params.set('limit', limit);
+            if (timeFilter && timeFilter !== 'all') params.set('time', timeFilter);
+            
+            const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+            window.history.replaceState({}, '', newUrl);
+        }
+
+        // Initialize values on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            setInitialValues();
+        });
+
+        // Add event listeners for Enter key
+        document.getElementById('username').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('subreddit').focus();
+            }
+        });
+
+        document.getElementById('subreddit').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('titleSearch').focus();
+            }
+        });
+
+        document.getElementById('titleSearch').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('limit').focus();
+            }
+        });
+
+        document.getElementById('limit').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                fetchPosts();
+            }
+        });
+
+        // Add event listeners to update URL when form values change
+        document.getElementById('username').addEventListener('input', updateUrl);
+        document.getElementById('subreddit').addEventListener('input', updateUrl);
+        document.getElementById('titleSearch').addEventListener('input', updateUrl);
+        document.getElementById('limit').addEventListener('input', updateUrl);
+        document.getElementById('timeFilter').addEventListener('change', updateUrl);
+    </script>
+</body>
+</html>

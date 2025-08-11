@@ -662,7 +662,6 @@
             const query = encodeURIComponent(queryParts.join(' '));
             const searchUrl = `${REDDIT_API_BASE}/search.json?q=${query}&sort=new&t=${timeFilter}&limit=${limit}`;
             try {
-                alert(searchUrl);
                 const response = await fetch(searchUrl);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);

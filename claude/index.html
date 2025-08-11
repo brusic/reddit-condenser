@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit Post & Comment Condenser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #1a1a1b;
+            color: #d7dadc;
+            line-height: 1.4;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background-color: #030303;
+            border: 1px solid #343536;
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #818384;
+        }
+
+        input, select {
+            padding: 8px 12px;
+            border: 1px solid #343536;
+            border-radius: 4px;
+            background-color: #1a1a1b;
+            color: #d7dadc;
+            font-size: 14px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #0079d3;
+        }
+
+        .search-btn {
+            padding: 10px 20px;
+            background-color: #0079d3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .search-btn:hover {
+            background-color: #0060a8;
+        }
+
+        .search-btn:disabled {
+            background-color: #343536;
+            cursor: not-allowed;
+        }
+
+        .error {
+            background-color: #ff4500;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+
+        .content {
+            background-color: #1a1a1b;
+        }
+
+        .post {
+            background-color: #1a1a1b;
+            border: 1px solid #343536;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .post-header {
+            padding: 10px 15px;
+            background-color: #030303;
+            border-bottom: 1px solid #343536;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .post-title {
+            font-weight: 600;
+            color: #d7dadc;
+            flex: 1;
+        }
+
+        .post-meta {
+            font-size: 12px;
+            color: #818384;
+            margin-left: 10px;
+        }
+
+        .score {
+            color: #ff4500;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        .post-link {
+            color: #0079d3;
+            text-decoration: none;
+            margin-left: 10px;
+        }
+
+        .post-link:hover {
+            text-decoration: underline;
+        }
+
+        .collapse-btn {
+            background: none;
+            border: none;
+            color: #818384;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+
+        .post-content {
+            padding: 15px;
+        }
+
+        .post-body {
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        .comments {
+            border-top: 1px solid #343536;
+        }
+
+        .comment {
+            border-left: 2px solid #343536;
+            margin-left: 10px;
+            padding: 8px 0 8px 15px;
+        }
+
+        .comment-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+
+        .comment-author {
+            font-weight: 500;
+            color: #0079d3;
+            margin-right: 10px;
+        }
+
+        .comment-time {
+            font-size: 12px;
+            color: #818384;
+        }
+
+        .comment-body {
+            margin-left: 5px;
+            line-height: 1.5;
+        }
+
+        .comment.level-1 { margin-left: 20px; }
+        .comment.level-2 { margin-left: 40px; }
+        .comment.level-3 { margin-left: 60px; }
+        .comment.level-4 { margin-left: 80px; }
+        .comment.level-5 { margin-left: 100px; }
+
+        .hidden {
+            display: none;
+        }
+
+        .markdown {
+            color: #d7dadc;
+        }
+
+        .markdown p {
+            margin-bottom: 8px;
+        }
+
+        .markdown a {
+            color: #0079d3;
+            text-decoration: none;
+        }
+
+        .markdown a:hover {
+            text-decoration: underline;
+        }
+
+        .markdown code {
+            background-color: #2d2d2e;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .markdown pre {
+            background-color: #2d2d2e;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .markdown blockquote {
+            border-left: 3px solid #818384;
+            padding-left: 15px;
+            margin: 10px 0;
+            color: #818384;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Reddit Post & Comment Condenser</h1>
+            <form id="search-form">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="username">Username:</label>
+                        <input type="text" id="username" name="username" placeholder="e.g. spez">
+                    </div>
+                    <div class="form-group">
+                        <label for="subreddit">Subreddit:</label>
+                        <input type="text" id="subreddit" name="subreddit" placeholder="e.g. javascript">
+                    </div>
+                    <div class="form-group">
+                        <label for="title">Title Search:</label>
+                        <input type="text" id="title" name="title" placeholder="Search in titles">
+                    </div>
+                    <div class="form-group">
+                        <label for="limit">Limit:</label>
+                        <select id="limit" name="limit">
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="time">Time Filter:</label>
+                        <select id="time" name="time">
+                            <option value="all" selected>All Time</option>
+                            <option value="year">Past Year</option>
+                            <option value="month">Past Month</option>
+                            <option value="week">Past Week</option>
+                            <option value="day">Past Day</option>
+                            <option value="hour">Past Hour</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="search-btn">Search Reddit</button>
+            </form>
+            <div id="error" class="error"></div>
+            <div id="loading" class="loading">Loading posts and comments...</div>
+        </div>
+        
+        <div id="content" class="content"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        class RedditCondenser {
+            constructor() {
+                this.form = document.getElementById('search-form');
+                this.content = document.getElementById('content');
+                this.error = document.getElementById('error');
+                this.loading = document.getElementById('loading');
+                
+                this.init();
+            }
+
+            init() {
+                this.loadFromURL();
+                this.form.addEventListener('submit', this.handleSubmit.bind(this));
+                
+                // Update URL when form values change
+                this.form.addEventListener('input', this.updateURL.bind(this));
+            }
+
+            loadFromURL() {
+                const params = new URLSearchParams(window.location.search);
+                
+                document.getElementById('username').value = params.get('username') || '';
+                document.getElementById('subreddit').value = params.get('subreddit') || '';
+                document.getElementById('title').value = params.get('title') || '';
+                document.getElementById('limit').value = params.get('limit') || '25';
+                document.getElementById('time').value = params.get('time') || 'all';
+
+                // Auto-search if parameters are present and valid
+                if (this.validateForm(false)) {
+                    this.search();
+                }
+            }
+
+            updateURL() {
+                const formData = new FormData(this.form);
+                const params = new URLSearchParams();
+                
+                for (let [key, value] of formData.entries()) {
+                    if (value.trim()) {
+                        params.set(key, value);
+                    }
+                }
+                
+                const newURL = `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}`;
+                window.history.replaceState({}, '', newURL);
+            }
+
+            validateForm(showError = true) {
+                const username = document.getElementById('username').value.trim();
+                const subreddit = document.getElementById('subreddit').value.trim();
+                const title = document.getElementById('title').value.trim();
+                
+                if (!username && !subreddit && !title) {
+                    if (showError) {
+                        this.showError('Please provide at least one search criteria: username, subreddit, or title.');
+                    }
+                    return false;
+                }
+                
+                this.hideError();
+                return true;
+            }
+
+            handleSubmit(e) {
+                e.preventDefault();
+                
+                if (!this.validateForm()) {
+                    return;
+                }
+                
+                this.updateURL();
+                this.search();
+            }
+
+            async search() {
+                this.showLoading();
+                this.content.innerHTML = '';
+                
+                try {
+                    const posts = await this.fetchPosts();
+                    const postsWithComments = await this.fetchCommentsForPosts(posts);
+                    const mergedContent = this.mergePostsAndComments(postsWithComments);
+                    this.renderContent(mergedContent);
+                } catch (error) {
+                    this.showError('Failed to fetch Reddit data: ' + error.message);
+                } finally {
+                    this.hideLoading();
+                }
+            }
+
+            async fetchPosts() {
+                const username = document.getElementById('username').value.trim();
+                const subreddit = document.getElementById('subreddit').value.trim();
+                const title = document.getElementById('title').value.trim();
+                const limit = document.getElementById('limit').value;
+                const time = document.getElementById('time').value;
+
+                let allPosts = [];
+                const searches = [];
+
+                // Build search queries based on provided filters
+                if (username && subreddit && title) {
+                    // All three filters: search in specific subreddit for title, then filter by username
+                    searches.push({
+                        url: `https://www.reddit.com/r/${subreddit}/search.json`,
+                        params: {
+                            q: title,
+                            restrict_sr: 'true',
+                            sort: 'new',
+                            limit: limit,
+                            t: time,
+                            raw_json: 1
+                        },
+                        filterBy: 'username'
+                    });
+                } else if (username && subreddit) {
+                    // Username + subreddit: get user posts, then filter by subreddit
+                    searches.push({
+                        url: `https://www.reddit.com/user/${username}/submitted.json`,
+                        params: {
+                            limit: limit,
+                            t: time,
+                            raw_json: 1
+                        },
+                        filterBy: 'subreddit'
+                    });
+                } else if (username && title) {
+                    // Username + title: get user posts, then filter by title
+                    searches.push({
+                        url: `https://www.reddit.com/user/${username}/submitted.json`,
+                        params: {
+                            limit: limit,
+                            t: time,
+                            raw_json: 1
+                        },
+                        filterBy: 'title'
+                    });
+                } else if (subreddit && title) {
+                    // Subreddit + title: search in subreddit for title
+                    searches.push({
+                        url: `https://www.reddit.com/r/${subreddit}/search.json`,
+                        params: {
+                            q: title,
+                            restrict_sr: 'true',
+                            sort: 'new',
+                            limit: limit,
+                            t: time,
+                            raw_json: 1
+                        }
+                    });
+                } else if (username) {
+                    // Username only
+                    searches.push({
+                        url: `https://www.reddit.com/user/${username}/submitted.json`,
+                        params: {
+                            limit: limit,
+                            t: time,
+                            raw_json: 1
+                        }
+                    });
+                } else if (subreddit) {
+                    // Subreddit only
+                    searches.push({
+                        url: `https://www.reddit.com/r/${subreddit}/search.json`,
+                        params: {
+                            q: title || '*',
+                            restrict_sr: 'true',
+                            sort: 'new',
+                            limit: limit,
+                            t: time,
+                            raw_json: 1
+                        }
+                    });
+                } else if (title) {
+                    // Title only
+                    searches.push({
+                        url: 'https://www.reddit.com/search.json',
+                        params: {
+                            q: title,
+                            sort: 'new',
+                            limit: limit,
+                            t: time,
+                            raw_json: 1
+                        }
+                    });
+                }
+
+                // Execute searches
+                for (const search of searches) {
+                    const searchParams = new URLSearchParams(search.params);
+                    const response = await fetch(`${search.url}?${searchParams.toString()}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    let posts = data.data.children.map(child => child.data);
+                    
+                    // Apply additional filtering based on criteria
+                    posts = this.filterPosts(posts, username, subreddit, title, search.filterBy);
+                    allPosts.push(...posts);
+                }
+
+                // Remove duplicates and sort by created time
+                const uniquePosts = this.removeDuplicatePosts(allPosts);
+                return uniquePosts.sort((a, b) => b.created_utc - a.created_utc).slice(0, parseInt(limit));
+            }
+
+            filterPosts(posts, username, subreddit, title, filterBy) {
+                return posts.filter(post => {
+                    // If filterBy is specified, we only need to check that specific field
+                    if (filterBy === 'username' && username) {
+                        return post.author.toLowerCase() === username.toLowerCase();
+                    }
+                    if (filterBy === 'subreddit' && subreddit) {
+                        return post.subreddit.toLowerCase() === subreddit.toLowerCase();
+                    }
+                    if (filterBy === 'title' && title) {
+                        return post.title.toLowerCase().includes(title.toLowerCase());
+                    }
+                    
+                    // Otherwise check all provided filters
+                    if (username && post.author.toLowerCase() !== username.toLowerCase()) {
+                        return false;
+                    }
+                    if (subreddit && post.subreddit.toLowerCase() !== subreddit.toLowerCase()) {
+                        return false;
+                    }
+                    if (title && !post.title.toLowerCase().includes(title.toLowerCase())) {
+                        return false;
+                    }
+                    return true;
+                });
+            }
+
+            removeDuplicatePosts(posts) {
+                const seen = new Set();
+                return posts.filter(post => {
+                    if (seen.has(post.id)) {
+                        return false;
+                    }
+                    seen.add(post.id);
+                    return true;
+                });
+            }
+
+            async fetchCommentsForPosts(posts) {
+                const postsWithComments = [];
+                
+                for (const post of posts) {
+                    try {
+                        const commentsUrl = `https://www.reddit.com${post.permalink}.json?raw_json=1`;
+                        const response = await fetch(commentsUrl);
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            const comments = data[1]?.data?.children || [];
+                            postsWithComments.push({
+                                ...post,
+                                comments: this.flattenComments(comments)
+                            });
+                        } else {
+                            postsWithComments.push({
+                                ...post,
+                                comments: []
+                            });
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to fetch comments for post ${post.id}:`, error);
+                        postsWithComments.push({
+                            ...post,
+                            comments: []
+                        });
+                    }
+                }
+                
+                return postsWithComments;
+            }
+
+            flattenComments(comments, level = 0) {
+                const flattened = [];
+                
+                for (const comment of comments) {
+                    if (comment.kind === 't1' && comment.data.body) {
+                        const commentData = {
+                            ...comment.data,
+                            level: level,
+                            created_utc: comment.data.created_utc
+                        };
+                        flattened.push(commentData);
+                        
+                        if (comment.data.replies && comment.data.replies.data) {
+                            flattened.push(...this.flattenComments(comment.data.replies.data.children, level + 1));
+                        }
+                    }
+                }
+                
+                return flattened;
+            }
+
+            mergePostsAndComments(postsWithComments) {
+                // Sort posts by creation time and return them with their comments grouped
+                return postsWithComments.sort((a, b) => b.created_utc - a.created_utc);
+            }
+
+            renderContent(posts) {
+                let html = '';
+                
+                for (const post of posts) {
+                    html += this.renderPost(post);
+                    
+                    // Sort comments by creation time (chronological order)
+                    const sortedComments = post.comments.sort((a, b) => a.created_utc - b.created_utc);
+                    
+                    for (const comment of sortedComments) {
+                        html += this.renderComment(comment);
+                    }
+                    
+                    html += '</div></div>'; // Close post
+                }
+                
+                this.content.innerHTML = html;
+                this.attachEventListeners();
+            }
+
+            renderPost(post) {
+                const timeAgo = this.getTimeAgo(post.created_utc);
+                const postUrl = `https://www.reddit.com${post.permalink}`;
+                const commentCount = post.comments.length;
+                
+                return `
+                    <div class="post" data-post-id="${post.id}">
+                        <div class="post-header" onclick="togglePost('${post.id}')">
+                            <button class="collapse-btn">−</button>
+                            <div class="post-title">${this.escapeHtml(post.title)}</div>
+                            <div class="post-meta">
+                                <span class="score">${post.score} points</span>
+                                ${commentCount} comment${commentCount !== 1 ? 's' : ''} • 
+                                u/${post.author} • ${timeAgo}
+                            </div>
+                            <a href="${postUrl}" target="_blank" class="post-link" onclick="event.stopPropagation()">
+                                Open
+                            </a>
+                        </div>
+                        <div class="post-content" id="post-${post.id}">
+                            ${post.selftext ? `<div class="post-body markdown">${this.renderMarkdown(post.selftext)}</div>` : ''}
+                            <div class="comments">
+                `;
+            }
+
+            renderComment(comment) {
+                const timeAgo = this.getTimeAgo(comment.created_utc);
+                const levelClass = comment.level <= 5 ? `level-${comment.level}` : 'level-5';
+                
+                return `
+                    <div class="comment ${levelClass}" data-comment-id="${comment.id}">
+                        <div class="comment-header" onclick="toggleComment('${comment.id}')">
+                            <button class="collapse-btn">−</button>
+                            <span class="comment-author">u/${comment.author}</span>
+                            <span class="score">${comment.score} points</span>
+                            <span class="comment-time">${timeAgo}</span>
+                        </div>
+                        <div class="comment-body markdown" id="comment-${comment.id}">
+                            ${this.renderMarkdown(comment.body)}
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderMarkdown(text) {
+                try {
+                    return marked.parse(text);
+                } catch (error) {
+                    return this.escapeHtml(text);
+                }
+            }
+
+            attachEventListeners() {
+                // Make toggle functions global
+                window.togglePost = (postId) => {
+                    const content = document.getElementById(`post-${postId}`);
+                    const btn = content.previousElementSibling.querySelector('.collapse-btn');
+                    
+                    if (content.classList.contains('hidden')) {
+                        content.classList.remove('hidden');
+                        btn.textContent = '−';
+                    } else {
+                        content.classList.add('hidden');
+                        btn.textContent = '+';
+                    }
+                };
+
+                window.toggleComment = (commentId) => {
+                    const content = document.getElementById(`comment-${commentId}`);
+                    const btn = content.previousElementSibling.querySelector('.collapse-btn');
+                    
+                    if (content.classList.contains('hidden')) {
+                        content.classList.remove('hidden');
+                        btn.textContent = '−';
+                    } else {
+                        content.classList.add('hidden');
+                        btn.textContent = '+';
+                    }
+                };
+            }
+
+            getTimeAgo(timestamp) {
+                const now = Math.floor(Date.now() / 1000);
+                const diff = now - timestamp;
+                
+                if (diff < 60) return `${diff}s ago`;
+                if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+                if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+                return `${Math.floor(diff / 86400)}d ago`;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            showError(message) {
+                this.error.textContent = message;
+                this.error.style.display = 'block';
+            }
+
+            hideError() {
+                this.error.style.display = 'none';
+            }
+
+            showLoading() {
+                this.loading.style.display = 'block';
+            }
+
+            hideLoading() {
+                this.loading.style.display = 'none';
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new RedditCondenser();
+        });
+    </script>
+</body>
+</html>

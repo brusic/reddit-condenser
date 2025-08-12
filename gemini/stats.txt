@@ -1,0 +1,80 @@
+
+╭────────────╮
+│  > /stats  │
+╰────────────╯
+
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                         │
+│  Session Stats                                                                                          │
+│                                                                                                         │
+│  Interaction Summary                                                                                    │
+│  Tool Calls:                 4 ( ✔ 4 ✖ 0 )                                                              │
+│  Success Rate:               100.0%                                                                     │
+│  User Agreement:             100.0% (3 reviewed)                                                        │
+│                                                                                                         │
+│  Performance                                                                                            │
+│  Wall Time:                  13m 20s                                                                    │
+│  Agent Active:               11m 38s                                                                    │
+│    » API Time:               7m 52s (67.6%)                                                             │
+│    » Tool Time:              3m 46s (32.4%)                                                             │
+│                                                                                                         │
+│                                                                                                         │
+│  Model Usage                  Reqs   Input Tokens  Output Tokens                                        │
+│  ───────────────────────────────────────────────────────────────                                        │
+│  gemini-2.5-pro                  7        460,429         40,232                                        │
+│                                                                                                         │
+│  Savings Highlight: 227,968 (49.5%) of input tokens were served from the cache, reducing costs.         │
+│                                                                                                         │
+│  » Tip: For a full token breakdown, run `/stats model`.                                                 │
+│                                                                                                         │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+╭──────────────────╮
+│  > /stats tools  │
+╰──────────────────╯
+
+╭────────────────────────────────────────────────────────────────────╮
+│                                                                    │
+│  Tool Stats For Nerds                                              │
+│                                                                    │
+│  Tool Name                   Calls   Success Rate   Avg Duration   │
+│  ────────────────────────────────────────────────────────────────  │
+│  write_file                      3         100.0%         1m 14s   │
+│  run_shell_command               1         100.0%           2.8s   │
+│                                                                    │
+│  User Decision Summary                                             │
+│  Total Reviewed Suggestions:                                   3   │
+│   » Accepted:                                                  3   │
+│   » Rejected:                                                  0   │
+│   » Modified:                                                  0   │
+│  ────────────────────────────────────────────────────────────────  │
+│   Overall Agreement Rate:                                 100.0%   │
+│                                                                    │
+╰────────────────────────────────────────────────────────────────────╯
+╭──────────────────╮
+│  > /stats model  │
+╰──────────────────╯
+
+╭──────────────────────────────────────────────────────╮
+│                                                      │
+│  Model Stats For Nerds                               │
+│                                                      │
+│  Metric                      gemini-2.5-pro          │
+│  ──────────────────────────────────────────────────  │
+│  API                                                 │
+│  Requests                    7                       │
+│  Errors                      0 (0.0%)                │
+│  Avg Latency                 1m 7s                   │
+│                                                      │
+│  Tokens                                              │
+│  Total                       502,873                 │
+│    ↳ Prompt                  460,429                 │
+│    ↳ Cached                  227,968 (49.5%)         │
+│    ↳ Thoughts                2,212                   │
+│    ↳ Output                  40,232                  │
+│                                                      │
+╰──────────────────────────────────────────────────────╯
+
+

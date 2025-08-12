@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit Condenser</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1a1b;
+            color: #d7dadc;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+        }
+        h1 {
+            text-align: center;
+            color: #d7dadc;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            background-color: #272729;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .filters input, .filters select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #343536;
+            background-color: #1a1a1b;
+            color: #d7dadc;
+        }
+        .filters button {
+            padding: 8px 15px;
+            border-radius: 4px;
+            border: none;
+            background-color: #d7dadc;
+            color: #1a1a1b;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .filters button:hover {
+            background-color: #c0c3c4;
+        }
+        #error {
+            color: #ff4500;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .post {
+            background-color: #272729;
+            border: 1px solid #343536;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            padding: 15px;
+        }
+        .post-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        .post-title {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .post-meta {
+            font-size: 0.9em;
+            color: #818384;
+        }
+        .post-body {
+            margin-top: 10px;
+        }
+        .comment {
+            border-left: 2px solid #343536;
+            padding-left: 15px;
+            margin-top: 10px;
+            margin-left: 10px;
+        }
+        .comment-header {
+            display: flex;
+            align-items: center;
+            font-size: 0.9em;
+            color: #818384;
+            cursor: pointer;
+        }
+        .comment-author {
+            font-weight: bold;
+            color: #4fbcff;
+            margin-right: 10px;
+        }
+        .comment-body {
+            padding-top: 5px;
+        }
+        .collapsible-content {
+            display: block;
+        }
+        .collapsed > .collapsible-content {
+            display: none;
+        }
+        .score {
+            margin: 0 10px;
+        }
+        a {
+            color: #4fbcff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .md p {
+            margin-top: 0;
+            margin-bottom: 1em;
+        }
+        .md a {
+            color: #4fbcff;
+        }
+        .md blockquote {
+            border-left: 2px solid #4fbcff;
+            margin: 0 0 1em 5px;
+            padding-left: 10px;
+        }
+        .md ul, .md ol {
+            padding-left: 20px;
+        }
+        .md pre {
+            background-color: #1a1a1b;
+            border: 1px solid #343536;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .md code {
+            background-color: #1a1a1b;
+            border: 1px solid #343536;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        }
+        .md pre code {
+            border: none;
+            padding: 0;
+        }
+        .post-content {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #343536;
+        }
+        .collapse-marker {
+            margin-right: 5px;
+            font-weight: bold;
+            width: 15px;
+            display: inline-block;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Reddit Condenser</h1>
+        <div class="filters">
+            <input type="text" id="username" placeholder="Username">
+            <input type="text" id="subreddit" placeholder="Subreddit">
+            <input type="text" id="title" placeholder="Title">
+            <select id="limit">
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+            <select id="time">
+                <option value="all">All Time</option>
+                <option value="hour">Past Hour</option>
+                <option value="day">Past 24 Hours</option>
+                <option value="week">Past Week</option>
+                <option value="month">Past Month</option>
+                <option value="year">Past Year</option>
+            </select>
+            <button id="fetch">Fetch Posts</button>
+        </div>
+        <div id="error"></div>
+        <div id="posts"></div>
+    </div>
+
+    <script>
+        const usernameInput = document.getElementById('username');
+        const subredditInput = document.getElementById('subreddit');
+        const titleInput = document.getElementById('title');
+        const limitInput = document.getElementById('limit');
+        const timeInput = document.getElementById('time');
+        const fetchButton = document.getElementById('fetch');
+        const errorDiv = document.getElementById('error');
+        const postsDiv = document.getElementById('posts');
+
+        function updateURL() {
+            const params = new URLSearchParams();
+            if (usernameInput.value) params.set('username', usernameInput.value);
+            if (subredditInput.value) params.set('subreddit', subredditInput.value);
+            if (titleInput.value) params.set('title', titleInput.value);
+            params.set('limit', limitInput.value);
+            params.set('t', timeInput.value);
+            window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
+        }
+
+        function loadFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            usernameInput.value = params.get('username') || '';
+            subredditInput.value = params.get('subreddit') || '';
+            titleInput.value = params.get('title') || '';
+            limitInput.value = params.get('limit') || '25';
+            timeInput.value = params.get('t') || 'all';
+            if (params.has('username') || params.has('subreddit') || params.has('title')) {
+                fetchPosts();
+            }
+        }
+
+        function displayError(message) {
+            errorDiv.textContent = message;
+        }
+
+        function createCommentElement(comment) {
+            const commentDiv = document.createElement('div');
+            commentDiv.className = 'comment';
+            if (comment.kind === 'more') {
+                commentDiv.innerHTML = `<a href="#" class="load-more" data-post-id="${comment.data.parent_id.substring(3)}" data-children="${comment.data.children.join(',')}">Load more comments (${comment.data.count})</a>`;
+                return commentDiv;
+            }
+
+            const data = comment.data;
+            if (!data.author) { // Handle deleted comments
+                const deletedDiv = document.createElement('div');
+                deletedDiv.className = 'comment';
+                deletedDiv.innerHTML = '<p>[deleted]</p>';
+                return deletedDiv;
+            }
+            
+            const bodyHtml = data.body ? marked.parse(data.body) : '<p>[deleted]</p>';
+
+            commentDiv.innerHTML = `
+                <div class="comment-header">
+                    <span class="collapse-marker">[-]</span>
+                    <span class="comment-author">${data.author}</span>
+                    <span class="score">${data.score} points</span>
+                    <span class="timestamp">${new Date(data.created_utc * 1000).toLocaleString()}</span>
+                </div>
+                <div class="collapsible-content comment-body">
+                    ${bodyHtml}
+                </div>
+            `;
+
+            const replies = data.replies?.data?.children;
+            if (replies) {
+                const repliesDiv = document.createElement('div');
+                repliesDiv.className = 'replies';
+                replies.forEach(reply => {
+                    repliesDiv.appendChild(createCommentElement(reply));
+                });
+                commentDiv.querySelector('.collapsible-content').appendChild(repliesDiv);
+            }
+            
+            const header = commentDiv.querySelector('.comment-header');
+            header.addEventListener('click', () => {
+                commentDiv.classList.toggle('collapsed');
+                const marker = header.querySelector('.collapse-marker');
+                marker.textContent = commentDiv.classList.contains('collapsed') ? '[+]' : '[-]';
+            });
+
+            return commentDiv;
+        }
+
+        async function fetchPosts() {
+            const username = usernameInput.value.trim();
+            const subreddit = subredditInput.value.trim();
+            const title = titleInput.value.trim();
+            const limit = limitInput.value;
+            const time = timeInput.value;
+
+            if (!username && !subreddit && !title) {
+                displayError('Please provide a username, subreddit, or title.');
+                return;
+            }
+            displayError('');
+            postsDiv.innerHTML = 'Loading...';
+            updateURL();
+
+            let query = '';
+            if (username) query += `author:${username} `;
+            if (subreddit) query += `subreddit:${subreddit} `;
+            if (title) query += `title:"${title}" `;
+
+            try {
+                const response = await fetch(`https://www.reddit.com/search.json?q=${encodeURIComponent(query.trim())}&limit=${limit}&t=${time}&sort=new`);
+                const data = await response.json();
+                postsDiv.innerHTML = '';
+
+                if (data.data.children.length === 0) {
+                    postsDiv.innerHTML = 'No posts found.';
+                    return;
+                }
+
+                for (const post of data.data.children) {
+                    const postData = post.data;
+                    const postDiv = document.createElement('div');
+                    postDiv.className = 'post';
+
+                    let postBodyHtml = '';
+                    if (postData.is_self && postData.selftext) {
+                        postBodyHtml = marked.parse(postData.selftext);
+                    }
+
+                    postDiv.innerHTML = `
+                        <div class="post-header">
+                            <div class="post-title">
+                                <span class="collapse-marker">[-]</span>
+                                <a href="https://www.reddit.com${postData.permalink}" target="_blank">${postData.title}</a>
+                            </div>
+                            <div class="post-meta">
+                                <span class="score">${postData.score} points</span>
+                                <span>${postData.num_comments} comments</span>
+                            </div>
+                        </div>
+                        <div class="collapsible-content post-body">
+                            ${postBodyHtml ? `<div class="post-content">${postBodyHtml}</div>` : ''}
+                            <div class="comments-container">Loading comments...</div>
+                        </div>
+                    `;
+                    postsDiv.appendChild(postDiv);
+
+                    const header = postDiv.querySelector('.post-header');
+                    header.addEventListener('click', (e) => {
+                        if (e.target.tagName !== 'A') {
+                           postDiv.classList.toggle('collapsed');
+                           const marker = header.querySelector('.collapse-marker');
+                           marker.textContent = postDiv.classList.contains('collapsed') ? '[+]' : '[-]';
+                        }
+                    });
+
+                    const commentsResponse = await fetch(`https://www.reddit.com${postData.permalink}.json`);
+                    const commentsData = await commentsResponse.json();
+                    const commentsContainer = postDiv.querySelector('.comments-container');
+                    commentsContainer.innerHTML = '';
+
+                    if (commentsData[1].data.children.length > 0) {
+                        commentsData[1].data.children.forEach(comment => {
+                            commentsContainer.appendChild(createCommentElement(comment));
+                        });
+                    } else {
+                        commentsContainer.innerHTML = 'No comments to display.';
+                    }
+                }
+            } catch (error) {
+                displayError('Failed to fetch data from Reddit. The API might be down or your query is invalid.');
+                console.error(error);
+            }
+        }
+
+        fetchButton.addEventListener('click', fetchPosts);
+        usernameInput.addEventListener('change', updateURL);
+        subredditInput.addEventListener('change', updateURL);
+        titleInput.addEventListener('change', updateURL);
+        limitInput.addEventListener('change', updateURL);
+        timeInput.addEventListener('change', updateURL);
+
+        window.addEventListener('load', loadFromURL);
+    </script>
+</body>
+</html>

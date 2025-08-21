@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Reddit Condenser — Search by user / subreddit / title</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f6f7f8;
+        --card: #fff;
+        --muted: #6a737c;
+        --accent: #ff4500;
+        --border: #e1e4e8;
+      }
+      body {
+        font-family: Inter, system-ui, Segoe UI, Roboto, "Helvetica Neue", Arial;
+        margin: 0;
+        background: var(--bg);
+        color: #111;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 28px auto;
+        padding: 16px;
+      }
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 12px 0;
+      }
+      .controls label {
+        display: flex;
+        flex-direction: column;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      input[type="text"],
+      select,
+      input[type="number"] {
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fff;
+      }
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        padding: 8px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .error {
+        color: #900;
+        margin: 8px 0;
+      }
+      .post {
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 12px;
+        margin: 12px 0;
+        border-radius: 8px;
+      }
+      .post .meta {
+        display: flex;
+        gap: 12px;
+        font-size: 13px;
+        color: var(--muted);
+        align-items: center;
+      }
+      .post .title {
+        font-weight: 600;
+        margin: 6px 0;
+      }
+      .post .body {
+        margin: 8px 0;
+      }
+      .comments {
+        margin-top: 12px;
+      }
+      .comment {
+        border-left: 2px solid #eee;
+        padding: 8px 12px;
+        margin: 6px 0;
+      }
+      .comment .meta {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .toggle {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 13px;
+        margin-left: auto;
+      }
+      a.inline {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .small {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .spinner {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        border: 3px solid #eee;
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Reddit Condenser</h1>
+        <div class="small">
+          Search Reddit by username, subreddit, and/or title — at least one
+          required.
+        </div>
+      </header>
+
+      <form id="searchForm" class="controls" onsubmit="return false">
+        <label
+          >Username
+          <input id="username" type="text" placeholder="author (without u/)"
+        /></label>
+        <label
+          >Subreddit
+          <input
+            id="subreddit"
+            type="text"
+            placeholder="subreddit (without r/)"
+        /></label>
+        <label
+          >Title contains
+          <input id="title" type="text" placeholder="title text"
+        /></label>
+        <label
+          >Limit <input id="limit" type="number" min="1" max="100" value="25"
+        /></label>
+        <label
+          >Time
+          <select id="time">
+            <option value="all">all</option>
+            <option value="year">year</option>
+            <option value="month">month</option>
+            <option value="week">week</option>
+            <option value="day">day</option>
+            <option value="hour">hour</option>
+          </select></label
+        >
+        <label
+          >Sort
+          <select id="sort">
+            <option value="relevance">relevance</option>
+            <option value="new">new</option>
+            <option value="hot">hot</option>
+            <option value="top">top</option>
+          </select></label
+        >
+        <div style="display: flex; align-items: flex-end; gap: 8px">
+          <button id="searchBtn" type="button">Search</button>
+        </div>
+      </form>
+
+      <div id="error" class="error" role="alert" style="display: none"></div>
+
+      <main id="results"></main>
+      <div
+        id="note"
+        class="small"
+        style="margin-top: 16px; color: var(--muted)"
+      ></div>
+    </div>
+
+    <!-- Marked for markdown -> HTML and DOMPurify to sanitize -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
+
+    <script>
+      // Requirements checklist (kept here for clarity):
+      // - Use /search endpoint with optional username/subreddit/title (at least one required)
+      // - Display posts in time order with comment tree below each post
+      // - Show number of comments, scores for posts and comments
+      // - Render markdown elegantly and sanitize
+      // - Collapse/expand posts and comments (default expanded)
+      // - Limit and time filters with reddit defaults
+      // - Use URL params to define initial values and update when changed
+
+      // Assumptions noted in UI and code comments: reddit public JSON endpoints are used
+
+      const qs = new URLSearchParams(location.search);
+      const els = {
+        username: document.getElementById("username"),
+        subreddit: document.getElementById("subreddit"),
+        title: document.getElementById("title"),
+        limit: document.getElementById("limit"),
+        time: document.getElementById("time"),
+        sort: document.getElementById("sort"),
+        searchBtn: document.getElementById("searchBtn"),
+        results: document.getElementById("results"),
+        error: document.getElementById("error"),
+        note: document.getElementById("note"),
+      };
+
+      // Initialize from URL params (if present). Defaults: reddit defaults (limit=25, time=all, sort=relevance)
+      els.username.value = qs.get("username") || "";
+      els.subreddit.value = qs.get("subreddit") || "";
+      els.title.value = qs.get("title") || "";
+      els.limit.value = qs.get("limit") || "25";
+      els.time.value = qs.get("time") || "all";
+      // Default sort is 'new' (newest first)
+      els.sort.value = qs.get("sort") || "new";
+
+      function showError(msg) {
+        els.error.style.display = "block";
+        els.error.textContent = msg;
+      }
+      function clearError() {
+        els.error.style.display = "none";
+        els.error.textContent = "";
+      }
+
+      function updateUrlParams() {
+        const p = new URLSearchParams();
+        if (els.username.value) p.set("username", els.username.value);
+        if (els.subreddit.value) p.set("subreddit", els.subreddit.value);
+        if (els.title.value) p.set("title", els.title.value);
+        if (els.limit.value) p.set("limit", els.limit.value);
+        if (els.time.value) p.set("time", els.time.value);
+        if (els.sort.value) p.set("sort", els.sort.value);
+        const newUrl = location.pathname + "?" + p.toString() + location.hash;
+        history.replaceState(null, "", newUrl);
+      }
+
+      function buildSearchQuery() {
+        const parts = [];
+        if (els.username.value) parts.push(`author:${els.username.value}`);
+        if (els.subreddit.value) parts.push(`subreddit:${els.subreddit.value}`);
+        if (els.title.value) parts.push(`title:${els.title.value}`);
+        return parts.join(" ");
+      }
+
+      // JSONP fallback for standalone (file://) usage. Reddit supports a `jsonp` query
+      // parameter which will invoke a global callback with the JSON payload.
+      function jsonpFetch(url, timeout = 10000) {
+        return new Promise((resolve, reject) => {
+          const cbName = "reddit_cb_" + Math.random().toString(36).slice(2);
+          let timer = null;
+          function cleanup() {
+            if (timer) clearTimeout(timer);
+            try {
+              delete window[cbName];
+            } catch (e) {}
+            const s = document.getElementById(cbName);
+            if (s && s.parentNode) s.parentNode.removeChild(s);
+          }
+          window[cbName] = function (data) {
+            cleanup();
+            resolve(data);
+          };
+          const sep = url.includes("?") ? "&" : "?";
+          const src = url + sep + "jsonp=" + cbName;
+          const script = document.createElement("script");
+          script.id = cbName;
+          script.src = src;
+          script.async = true;
+          script.onerror = function () {
+            cleanup();
+            reject(new Error("JSONP load error"));
+          };
+          timer = setTimeout(() => {
+            cleanup();
+            reject(new Error("JSONP timeout"));
+          }, timeout);
+          document.body.appendChild(script);
+        });
+      }
+
+      async function fetchJson(url) {
+        // If opened via file:// try JSONP directly (browsers often block CORS for file pages).
+        if (location.protocol === "file:") {
+          return jsonpFetch(url);
+        }
+        try {
+          const res = await fetch(url, {
+            headers: { Accept: "application/json" },
+          });
+          if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+          return res.json();
+        } catch (err) {
+          // On CORS/network errors, attempt JSONP fallback so the app can run standalone.
+          if (
+            err &&
+            (err.message.includes("Failed to fetch") ||
+              err.message.includes("NetworkError"))
+          ) {
+            try {
+              return await jsonpFetch(url);
+            } catch (e) {
+              /* fall through to throw original */
+            }
+          }
+          throw err;
+        }
+      }
+
+      function renderMarkdown(md) {
+        try {
+          const html = marked.parse(md || "");
+          return DOMPurify.sanitize(html);
+        } catch (e) {
+          return "";
+        }
+      }
+
+      // Time formatting helpers
+      function timeAgo(tsSeconds) {
+        if (!tsSeconds) return "";
+        const now = Date.now() / 1000;
+        const d = Math.max(0, Math.floor(now - tsSeconds));
+        if (d < 60) return d + "s ago";
+        if (d < 3600) return Math.floor(d / 60) + "m ago";
+        if (d < 86400) return Math.floor(d / 3600) + "h ago";
+        if (d < 2592000) return Math.floor(d / 86400) + "d ago";
+        if (d < 31536000) return Math.floor(d / 2592000) + "mo ago";
+        return Math.floor(d / 31536000) + "y ago";
+      }
+
+      function formatTime(tsSeconds) {
+        if (!tsSeconds) return "";
+        const d = new Date(tsSeconds * 1000);
+        const iso =
+          d.getUTCFullYear() +
+          "-" +
+          String(d.getUTCMonth() + 1).padStart(2, "0") +
+          "-" +
+          String(d.getUTCDate()).padStart(2, "0");
+        const time =
+          String(d.getUTCHours()).padStart(2, "0") +
+          ":" +
+          String(d.getUTCMinutes()).padStart(2, "0");
+        return `${iso} ${time} UTC`;
+      }
+
+      function createPostElement(post) {
+        const el = document.createElement("article");
+        el.className = "post";
+        const data = post.data;
+        const title = data.title || "[no title]";
+        const numComments = data.num_comments || 0;
+        const score = data.score || 0;
+        const author = data.author || "[deleted]";
+        const subreddit = data.subreddit || "";
+        const postLink = `https://www.reddit.com${data.permalink}`;
+        const created = data.created_utc || data.created || null;
+        const age = created ? timeAgo(created) : "";
+        const createdAt = created ? formatTime(created) : "";
+
+        el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1">
+          <div class="meta">r/${subreddit} • Posted by u/${author} • <span class="small">${escapeHtml(
+          age
+        )}</span> • <span class="small">Score: ${score}</span></div>
+          <div class="title"><a class="inline" href="${postLink}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+          title
+        )}</a></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end">
+          <div class="small">comments: ${numComments}</div>
+          <button class="toggle" data-action="toggle-post">Collapse</button>
+        </div>
+      </div>
+      <div class="body">${
+        data.selftext ? renderMarkdown(data.selftext) : ""
+      }</div>
+      <div class="small" style="margin-top:6px;color:var(--muted)">Posted: ${escapeHtml(
+        createdAt
+      )}</div>
+      <div class="comments" data-postid="${data.id}"></div>
+    `;
+
+        return el;
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>\"']/g, function (c) {
+          return {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          }[c];
+        });
+      }
+
+      function renderCommentNode(c) {
+        const el = document.createElement("div");
+        el.className = "comment";
+        const data = c.data;
+        const author = data.author || "[deleted]";
+        const score = data.score != null ? data.score : 0;
+        const bodyHtml = data.body_html
+          ? DOMPurify.sanitize(data.body_html)
+          : renderMarkdown(data.body || "");
+        const created = data.created_utc || data.created || null;
+        const age = created ? timeAgo(created) : "";
+        const createdAt = created ? formatTime(created) : "";
+        el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1">
+            <div class="meta">u/${escapeHtml(
+              author
+            )} • <span class="small">${escapeHtml(
+          age
+        )}</span> • <span class="small">Score: ${score}</span></div>
+          <div class="body">${bodyHtml}</div>
+        </div>
+        <div>
+          <button class="toggle" data-action="toggle-comment">Collapse</button>
+        </div>
+      </div>
+        <div class="small" style="margin-top:6px;color:var(--muted)">Commented: ${escapeHtml(
+          createdAt
+        )}</div>
+        <div class="replies"></div>
+    `;
+        return el;
+      }
+
+      function renderRepliesTree(children, container) {
+        for (const ch of children) {
+          if (ch.kind !== "t1") continue; // only comments
+          const node = renderCommentNode(ch);
+          container.appendChild(node);
+          // replies may be listing
+          if (ch.data && ch.data.replies && ch.data.replies.data) {
+            const replies = ch.data.replies.data.children || [];
+            const repliesContainer = node.querySelector(".replies");
+            renderRepliesTree(replies, repliesContainer);
+          }
+        }
+      }
+
+      async function loadCommentsForPost(postId, commentsContainer) {
+        commentsContainer.innerHTML =
+          '<div class="small">Loading comments <span class="spinner"></span></div>';
+        try {
+          const url = `https://www.reddit.com/comments/${postId}.json?limit=500`;
+          const json = await fetchJson(url);
+          // The comments live in json[1].data.children
+          const comments =
+            (json[1] && json[1].data && json[1].data.children) || [];
+          commentsContainer.innerHTML = "";
+          renderRepliesTree(comments, commentsContainer);
+        } catch (err) {
+          commentsContainer.innerHTML = `<div class="small" style="color:#900">Failed to load comments: ${escapeHtml(
+            err.message || String(err)
+          )}</div>`;
+          noteCORSIfNeeded(err);
+        }
+      }
+
+      function noteCORSIfNeeded(err) {
+        // If network error or CORS blocked, show helpful note
+        if (
+          err &&
+          err.message &&
+          (err.message.includes("Failed to fetch") ||
+            err.message.includes("NetworkError"))
+        ) {
+          els.note.innerHTML =
+            "This page attempts a JSONP fallback when opened via file://. If your browser blocks local network requests, open the file in a browser that allows them or host the file on any static server.";
+        }
+      }
+
+      async function doSearch() {
+        clearError();
+        els.note.textContent = "";
+        els.results.innerHTML = "";
+        const q = buildSearchQuery();
+        if (!q) {
+          showError(
+            "Please provide at least one of username, subreddit, or title."
+          );
+          return;
+        }
+        updateUrlParams();
+        const limit = Number(els.limit.value) || 25;
+        const time = els.time.value || "all";
+        // Posts will always be sorted by date (newest first). We request 'new' and
+        // also enforce a local sort by created_utc descending to guarantee ordering.
+        const enforcedSort = "new";
+        // Reflect enforced sort in the UI so users see the effective ordering.
+        try {
+          els.sort.value = enforcedSort;
+        } catch (e) {}
+        const searchUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(
+          q
+        )}&limit=${limit}&t=${time}&sort=${enforcedSort}`;
+        els.results.innerHTML =
+          '<div class="small">Searching <span class="spinner"></span></div>';
+        try {
+          const json = await fetchJson(searchUrl);
+          const posts = (json && json.data && json.data.children) || [];
+          // Enforce newest-first ordering by created_utc descending regardless of server-side ordering.
+          posts.sort(
+            (a, b) =>
+              ((b && b.data && b.data.created_utc) || 0) -
+              ((a && a.data && a.data.created_utc) || 0)
+          );
+          els.results.innerHTML = "";
+          if (posts.length === 0)
+            els.results.innerHTML = '<div class="small">No posts found.</div>';
+          for (const p of posts) {
+            const postEl = createPostElement(p);
+            els.results.appendChild(postEl);
+            const commentsContainer = postEl.querySelector(".comments");
+            // load comments and render
+            loadCommentsForPost(p.data.id, commentsContainer);
+          }
+        } catch (err) {
+          els.results.innerHTML = "";
+          showError("Search failed: " + (err.message || String(err)));
+          noteCORSIfNeeded(err);
+        }
+      }
+
+      // Event delegation for toggles
+      document.addEventListener("click", (ev) => {
+        const t = ev.target;
+        if (!t) return;
+        if (t.dataset && t.dataset.action === "toggle-post") {
+          const post = t.closest(".post");
+          if (!post) return;
+          const comments = post.querySelector(".comments");
+          if (!comments) return;
+          const isHidden = comments.style.display === "none";
+          comments.style.display = isHidden ? "" : "none";
+          t.textContent = isHidden ? "Collapse" : "Expand";
+        }
+        if (t.dataset && t.dataset.action === "toggle-comment") {
+          const comment = t.closest(".comment");
+          if (!comment) return;
+          const replies = comment.querySelector(".replies");
+          if (!replies) return;
+          const isHidden = replies.style.display === "none";
+          replies.style.display = isHidden ? "" : "none";
+          t.textContent = isHidden ? "Collapse" : "Expand";
+        }
+      });
+
+      // Wire search button
+      els.searchBtn.addEventListener("click", doSearch);
+
+      // If any relevant URL param provided, auto-search
+      if (els.username.value || els.subreddit.value || els.title.value) {
+        // small timeout to allow UI to settle
+        setTimeout(() => doSearch(), 80);
+      }
+
+      // Provide minimal guidance
+      els.note.innerHTML =
+        "Note: This page uses Reddit public JSON endpoints. If you open via <code>file://</code> and see CORS errors, start a local static server (examples below).";
+    </script>
+
+    <hr style="margin-top: 24px" />
+    <div
+      style="
+        max-width: 980px;
+        margin: 10px auto;
+        padding: 8px;
+        font-size: 13px;
+        color: var(--muted);
+      "
+    >
+      Try serving locally with a static server if you encounter CORS issues:
+      <pre
+        style="
+          background: #fff;
+          padding: 8px;
+          border-radius: 6px;
+          border: 1px solid var(--border);
+        "
+      ><code>python3 -m http.server 8000
+# then open http://localhost:8000/index.html
+</code></pre>
+    </div>
+  </body>
+</html>

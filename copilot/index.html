@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reddit Condenser</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; background: #dae0e6; margin: 0; }
+    .container { max-width: 800px; margin: 2em auto; background: #fff; padding: 2em; border-radius: 8px; }
+    h1 { color: #ff4500; }
+    .filters { display: flex; flex-wrap: wrap; gap: 1em; margin-bottom: 1em; }
+    .filters label { font-weight: bold; }
+    .error { color: #b00020; margin-bottom: 1em; }
+    .post, .comment { border: 1px solid #ccc; border-radius: 6px; background: #f8f9fa; margin-bottom: 1em; }
+    .post-header, .comment-header { display: flex; align-items: center; gap: 1em; background: #f6f7f8; padding: 0.5em 1em; border-bottom: 1px solid #eee; }
+    .post-title { font-size: 1.2em; font-weight: bold; color: #0079d3; text-decoration: none; }
+    .score { color: #878a8c; font-size: 0.9em; }
+    .meta { color: #878a8c; font-size: 0.9em; }
+    .comment { margin-left: 2em; }
+    .markdown { margin: 1em; }
+    .collapse-btn { background: none; border: none; color: #0079d3; cursor: pointer; font-size: 1em; margin-right: 0.5em; }
+    .collapsed > .markdown, .collapsed > .comment-children { display: none; }
+    .collapsed > .post-header .collapse-btn::after,
+    .collapsed > .comment-header .collapse-btn::after { content: '▶'; }
+    .collapse-btn::after { content: '▼'; }
+    .comment-children { margin-left: 1em; }
+    .loading { color: #0079d3; }
+    .markdown pre { background: #eee; padding: 0.5em; border-radius: 4px; overflow-x: auto; }
+    .markdown code { background: #eee; padding: 0.2em 0.4em; border-radius: 3px; }
+    .markdown a { color: #0079d3; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Reddit Condenser</h1>
+    <form id="filters" class="filters">
+      <label>
+        Username:
+        <input type="text" id="username" name="username" placeholder="e.g. spez">
+      </label>
+      <label>
+        Subreddit:
+        <input type="text" id="subreddit" name="subreddit" placeholder="e.g. javascript">
+      </label>
+      <label>
+        Title:
+        <input type="text" id="title" name="title" placeholder="e.g. API">
+      </label>
+      <label>
+        Limit:
+        <select id="limit" name="limit">
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </label>
+      <label>
+        Time:
+        <select id="time" name="time">
+          <option value="all">All</option>
+          <option value="day">Day</option>
+          <option value="hour">Hour</option>
+          <option value="month">Month</option>
+          <option value="week">Week</option>
+          <option value="year">Year</option>
+        </select>
+      </label>
+      <button type="submit">Search</button>
+    </form>
+    <div class="error" id="error"></div>
+    <div id="results"></div>
+  </div>
+  <script>
+    // --- Markdown rendering (basic, safe) ---
+    function renderMarkdown(md) {
+      // Simple replacements for bold, italics, code, links, blockquotes, lists, line breaks
+      return md
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+        .replace(/\*(.*?)\*/g, '<i>$1</i>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\n&gt; (.*?)(\n|$)/g, '<blockquote>$1</blockquote>')
+        .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
+        .replace(/^\s*-\s+(.*)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>')
+        .replace(/\n/g, '<br>');
+    }
+
+    // --- URL param helpers ---
+    function getParams() {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        username: params.get('username') || '',
+        subreddit: params.get('subreddit') || '',
+        title: params.get('title') || '',
+        limit: params.get('limit') || '25',
+        time: params.get('time') || 'all'
+      };
+    }
+    function setParams(params) {
+      const url = new URL(window.location);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v) url.searchParams.set(k, v);
+        else url.searchParams.delete(k);
+      });
+      window.history.replaceState({}, '', url);
+    }
+
+    // --- UI state ---
+    function setFormFromParams(params) {
+      document.getElementById('username').value = params.username;
+      document.getElementById('subreddit').value = params.subreddit;
+      document.getElementById('title').value = params.title;
+      document.getElementById('limit').value = params.limit;
+      document.getElementById('time').value = params.time;
+    }
+
+    // --- Reddit API ---
+    async function fetchPosts({username, subreddit, title, limit, time}) {
+      let q = [];
+      if (title) q.push(title);
+      if (username) q.push('author:' + username);
+      if (subreddit) q.push('subreddit:' + subreddit);
+      const query = encodeURIComponent(q.join(' '));
+      const url = `https://www.reddit.com/search.json?q=${query}&sort=new&restrict_sr=${subreddit ? 1 : 0}&limit=${limit}&t=${time}`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('Failed to fetch posts');
+      const data = await resp.json();
+      return data.data.children.map(c => c.data);
+    }
+
+    async function fetchComments(permalink) {
+      const url = `https://www.reddit.com${permalink}.json?limit=500`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('Failed to fetch comments');
+      const data = await resp.json();
+      return data[1].data.children;
+    }
+
+    // --- Render posts and comments ---
+    function createPostElement(post, commentsTree) {
+      const postDiv = document.createElement('div');
+      postDiv.className = 'post';
+      postDiv.innerHTML = `
+        <div class="post-header">
+          <button class="collapse-btn" aria-label="Collapse post"></button>
+          <a class="post-title" href="https://reddit.com${post.permalink}" target="_blank">${post.title}</a>
+          <span class="score">▲ ${post.score}</span>
+          <span class="meta">by u/${post.author} in r/${post.subreddit} • ${new Date(post.created_utc*1000).toLocaleString()}</span>
+          <span class="meta">${post.num_comments} comments</span>
+        </div>
+        <div class="markdown">${renderMarkdown(post.selftext || '')}</div>
+        <div class="comment-children"></div>
+      `;
+      // Collapse logic
+      const collapseBtn = postDiv.querySelector('.collapse-btn');
+      collapseBtn.onclick = () => postDiv.classList.toggle('collapsed');
+      // Comments
+      const childrenDiv = postDiv.querySelector('.comment-children');
+      commentsTree.forEach(c => childrenDiv.appendChild(createCommentElement(c)));
+      return postDiv;
+    }
+
+    function createCommentElement(comment) {
+      if (!comment || !comment.data || comment.kind !== 't1') return document.createDocumentFragment();
+      const c = comment.data;
+      const div = document.createElement('div');
+      div.className = 'comment';
+      div.innerHTML = `
+        <div class="comment-header">
+          <button class="collapse-btn" aria-label="Collapse comment"></button>
+          <span class="score">▲ ${c.score}</span>
+          <span class="meta">u/${c.author} • ${new Date(c.created_utc*1000).toLocaleString()}</span>
+        </div>
+        <div class="markdown">${renderMarkdown(c.body || '')}</div>
+        <div class="comment-children"></div>
+      `;
+      // Collapse logic
+      const collapseBtn = div.querySelector('.collapse-btn');
+      collapseBtn.onclick = () => div.classList.toggle('collapsed');
+      // Children
+      if (c.replies && c.replies.data && c.replies.data.children) {
+        c.replies.data.children.forEach(child => {
+          div.querySelector('.comment-children').appendChild(createCommentElement(child));
+        });
+      }
+      return div;
+    }
+
+    // --- Main logic ---
+    async function doSearch(params) {
+      const errorDiv = document.getElementById('error');
+      const resultsDiv = document.getElementById('results');
+      errorDiv.textContent = '';
+      resultsDiv.innerHTML = '';
+      // Validate
+      if (!params.username && !params.subreddit && !params.title) {
+        errorDiv.textContent = 'Please enter at least one filter: username, subreddit, or title.';
+        return;
+      }
+      resultsDiv.innerHTML = '<div class="loading">Loading posts...</div>';
+      try {
+        const posts = await fetchPosts(params);
+        if (!posts.length) {
+          resultsDiv.innerHTML = '<div>No posts found.</div>';
+          return;
+        }
+        // Sort by time (descending)
+        posts.sort((a, b) => b.created_utc - a.created_utc);
+        resultsDiv.innerHTML = '';
+        for (const post of posts) {
+          const commentsTree = [];
+          if (post.num_comments > 0) {
+            const comments = await fetchComments(post.permalink);
+            comments.forEach(c => commentsTree.push(c));
+          }
+          resultsDiv.appendChild(createPostElement(post, commentsTree));
+        }
+      } catch (e) {
+        errorDiv.textContent = e.message;
+      }
+    }
+
+    // --- Form events ---
+    document.getElementById('filters').onsubmit = e => {
+      e.preventDefault();
+      const params = {
+        username: document.getElementById('username').value.trim(),
+        subreddit: document.getElementById('subreddit').value.trim(),
+        title: document.getElementById('title').value.trim(),
+        limit: document.getElementById('limit').value,
+        time: document.getElementById('time').value
+      };
+      setParams(params);
+      doSearch(params);
+    };
+
+    // --- On load: set form from URL, do search if any filter set ---
+    window.onload = () => {
+      const params = getParams();
+      setFormFromParams(params);
+      if (params.username || params.subreddit || params.title) {
+        doSearch(params);
+      }
+    };
+
+    // --- Update URL on input change ---
+    ['username','subreddit','title','limit','time'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        const params = {
+          username: document.getElementById('username').value.trim(),
+          subreddit: document.getElementById('subreddit').value.trim(),
+          title: document.getElementById('title').value.trim(),
+          limit: document.getElementById('limit').value,
+          time: document.getElementById('time').value
+        };
+        setParams(params);
+      });
+    });
+  </script>
+</body>
+</html>
